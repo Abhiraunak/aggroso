@@ -17,13 +17,13 @@ model Transcript{
   id Int @id @default(autoincrement())
   rawText String @map("rawText")
   createdAt DateTime @default(now()) @map("createAt")
-  actionItems ActionItme[]
+  actionItems ActionItem[]
 
   @@map("transcripts")
 
 }
 
-model ActionItme{
+model ActionItem{
   id              Int        @id @default(autoincrement())
   transcriptId    Int        @map("transcriptId")
   taskDescription String     @map("taskDescription")
