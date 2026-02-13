@@ -1,4 +1,4 @@
-import express , {Request, Response} from "express";
+import express, { Request, Response } from "express";
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { z } from "zod";
 import { PrismaClient } from '@prisma/client';
@@ -12,7 +12,7 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY as string);
 const prisma = new PrismaClient();
 
 // zod schema for input validation
-const idParamSchema = z.object ({
+const idParamSchema = z.object({
     id: z.coerce.number().int().positive("Id must be positive")
 });
 
@@ -33,25 +33,25 @@ const updateActionSchema = z.object({
 interface AIActionItem {
     taskDescription: string;
     owner: string | null;
-    dueDate: string| null;
+    dueDate: string | null;
 }
 
 // Route : for process the transcript
 
 router.post('/api/processTranscript', async (req: Request, res: Response) => {
-    try{
+    try {
         // validate the request body
         const parsedBody = processTranscriptShema.safeParse(req.body);
 
-        if(!parsedBody.success){
-            res.status(400).json({error: "validation failed"});
+        if (!parsedBody.success) {
+            res.status(400).json({ error: "validation failed" });
             return;
         }
 
         const { transcript } = parsedBody.data;
 
         // --- AI Extraction ---
-        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-pro' }); 
+        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-pro' });
         const prompt = `
             Analyze the following meeting transcript and extract all action items.
             Return ONLY a valid JSON array of objects. 
@@ -96,13 +96,44 @@ router.post('/api/processTranscript', async (req: Request, res: Response) => {
 
     } catch (error) {
         console.error("Error while processing the transcript");
-        res.status(500).json({ error : "An error occur while parsing the transcript"})
-
-
+        res.status(500).json({ error: "An error occur while parsing the transcript" })
     }
 })
 
+// get the history of transcript
+router.post('/api/history', async (req: Request, res: Response) => {
+    try {
+        const history = await prisma.transcript.findMany({
+            take: 5,
+            orderBy: { createdAt: 'desc' },
+            select: {
+                id: true,
+                rawText: true,
+                createdAt: true,
+                _count: {
+                    select: { actionItems: true } // Gets the count of related items
+                }
+            }
+        })
+
+        // map over the result
+        const formattedHistory = history.map(item => ({
+            id: item.id,
+            preview_text: item.rawText.substring(0, 100) + '...',
+            created_at: item.createdAt,
+            action_item_count: item._count.actionItems
+        }));
+
+        res.status(200).json({ data: formattedHistory });
+
+    } catch (error) {
+        console.error("Error while accesing the history", error);
+        res.status(500).json({ error: "An error occur while accesing the history" })
+    }
+
+})
+
 app.listen(port, () => {
-  console.log(`Server is running on port ${port}`);
+    console.log(`Server is running on port ${port}`);
 });
 
