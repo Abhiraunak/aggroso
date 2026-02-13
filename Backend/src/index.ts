@@ -56,7 +56,7 @@ router.post('/api/processTranscript', async (req: Request, res: Response): Promi
 
         const { transcript } = parsedBody.data;
 
-        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-pro' });
+        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
         const prompt = `
             Analyze the following meeting transcript and extract all action items.
             Return ONLY a valid JSON array of objects. 
@@ -199,6 +199,45 @@ router.delete('/api/action-items/:id', async (req: Request, res: Response): Prom
         console.error("Error while deleting item:", error);
         res.status(500).json({ error: "An error occurred while deleting the item" });
     }
+});
+
+// GET: System Health Check
+router.get('/api/health', async (req: Request, res: Response): Promise<void> => {
+    const healthStatus = {
+        backend: 'up', // If we reach this line, the Express server is up
+        database: 'down',
+        llm: 'down',
+        timestamp: new Date().toISOString()
+    };
+
+    // 1. Check Database connection
+    try {
+        // A simple, virtually zero-cost query to check the connection
+        await prisma.$queryRaw`SELECT 1`;
+        healthStatus.database = 'up';
+    } catch (dbError) {
+        console.error("Health Check - Database Error:", dbError);
+    }
+
+    // 2. Check LLM connection
+    try {
+        // We use the flash model for the health check as it is the fastest/cheapest
+        const flashModel = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' }); 
+        
+        // We set maxOutputTokens to 1 to ensure this ping costs practically nothing
+        await flashModel.generateContent({
+            contents: [{ role: 'user', parts: [{ text: 'ping' }] }],
+            generationConfig: { maxOutputTokens: 1 }
+        });
+        
+        healthStatus.llm = 'up';
+    } catch (llmError) {
+        console.error("Health Check - LLM Error:", llmError);
+    }
+
+    // Return 200 OK if everything is up, otherwise return 503 Service Unavailable
+    const isHealthy = healthStatus.database === 'up' && healthStatus.llm === 'up';
+    res.status(isHealthy ? 200 : 503).json(healthStatus);
 });
 
 app.use('/', router);
