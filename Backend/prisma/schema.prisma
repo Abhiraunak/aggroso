@@ -1,0 +1,38 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Transcript{
+  id Int @id @default(autoincrement())
+  rawText String @map("rawText")
+  createdAt DateTime @default(now()) @map("createAt")
+  actionItems ActionItme[]
+
+  @@map("transcripts")
+
+}
+
+model ActionItme{
+  id              Int        @id @default(autoincrement())
+  transcriptId    Int        @map("transcriptId")
+  taskDescription String     @map("taskDescription")
+  owner           String?
+  dueDate         String?    @map("due_date")
+  isDone          Boolean    @default(false) @map("isDone")
+  tags            String[]   @default([])
+
+  transcript      Transcript @relation(fields: [transcriptId], references: [id], onDelete: Cascade)
+
+  @@map("action_items")
+}
